@@ -145,6 +145,7 @@ delete_edges = []
 #             [0, 3409, 2066],
 #             [0, 0, 1]
 #         ], dtype=np.float32)
+group_rel_rotations = []
 
 def run_command(command):
     try:
@@ -624,7 +625,27 @@ def ransac_edges(graph, edges, group1, group2, i, j, max_iter=100):
     print('edges', edges)
     print('inliers ', best_inliers)
     print('outliers ', outliers)
-    input()
+
+    rel_pose = []
+    for img1, img2 in best_inliers:
+            # all pose c2w
+            # P_group1mean_2_b  = P_a*P_mean-1
+            pose_group1_mean_to_b = np.linalg.inv(pose_to_matrix(success_edges[(img1, img2)][0], success_edges[(img1, img2)][1])) @ pose_to_matrix(group1['q_mean'], group1['t_mean'])
+
+            # P_b_2_group2mean
+            pose_b_to_group2_mean = np.linalg.inv(pose_to_matrix(tmp_group2['q_mean'], tmp_group2['t_mean'])) @ pose_to_matrix(tmp_group2['imgs'][img2]['pose'][0], tmp_group2['imgs'][img2]['pose'][1])
+
+            rel_pose.append((pose_b_to_group2_mean @ pose_group1_mean_to_b, (img1, img2)))
+    rotvecs = [pose_to_rotvec_t(pose[0])[0] for pose in rel_pose]
+    translations = [pose_to_rotvec_t(pose[0])[1] for pose in rel_pose]
+    rotvec_mean = np.mean(rotvecs, axis=0)
+    t_mean = np.mean(translations, axis=0)
+    r_mean = R.from_rotvec(rotvec_mean)
+    q_mean = r_mean.as_quat()
+
+
+    group_rel_rotations.append((i, j, q_mean, t_mean))
+
     
 def run_glomap_for_groups(groups):
     for idx, group in enumerate(groups):
@@ -922,7 +943,7 @@ def parse_rgb_file(rgb_txt_path):
     return mapping
 
 
-name = '/home/disk3_SSD/ylx/data/22'
+name = '/home/disk3_SSD/ylx/data/37'
 
 if __name__ == "__main__":
     time_start = time.time()
@@ -1103,7 +1124,11 @@ if __name__ == "__main__":
         print("writing delete_edges.txt")
         for img1, img2 in delete_edges:
             f.write(f"{img_name2id[img1]} {img_name2id[img2]}\n")
-        
+
+    # with open(f'{name}/group_rel_rotations.txt', 'w') as f:
+    #     print("writing group_rel_rotations.txt")
+    #     for i, j, q, t in group_rel_rotations:
+    #         f.write(f"group_{i} group_{j} {q[3]} {q[0]} {q[1]} {q[2]} {t[0]} {t[1]} {t[2]}\n")        
 
     
 
