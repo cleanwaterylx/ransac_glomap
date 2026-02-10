@@ -155,7 +155,7 @@ def run_command(command):
 
         # 实时获取输出并处理
         for line in iter(process.stderr.readline, ''):
-            print(line, end='')  # 可以在这里发射信号将信息返回给调用者
+            # print(line, end='')  # 可以在这里发射信号将信息返回给调用者
             yield line.strip()   # 使用生成器来逐行返回输出内容
         
         process.stdout.close()
@@ -168,7 +168,7 @@ def run_command(command):
         print(f"Command failed: {e}")
         yield f"Command failed with code {e.returncode}"
 
-def colmap_run_feature_extractor(colmap_db_path, image_path, camera_model='PINHOLE'):
+def colmap_run_feature_extractor(colmap_db_path, image_path, camera_model='PINHOLE', show_progress=True):
     print("running feature extracting")
 
     feat_extracton_cmd = 'colmap feature_extractor' + '\
@@ -181,11 +181,12 @@ def colmap_run_feature_extractor(colmap_db_path, image_path, camera_model='PINHO
     print(feat_extracton_cmd)
     
     for line in run_command(feat_extracton_cmd):
-        print(line)
+        if show_progress:
+            print(line)
 
     print("feature extracting done")
 
-def colmap_run_feature_matcher(colmap_db_path):
+def colmap_run_feature_matcher(colmap_db_path, show_progress=True):
     print("running feature matching")
     
     feat_matching_cmd = 'colmap exhaustive_matcher'+ '\
@@ -194,11 +195,12 @@ def colmap_run_feature_matcher(colmap_db_path):
     print(feat_matching_cmd)
 
     for line in run_command(feat_matching_cmd):
-        print(line)
+        if show_progress:
+            print(line)
     
     print("feature matching done")
 
-def glomap_run_mapper(colmap_db_path, image_path, output_path):
+def glomap_run_mapper(colmap_db_path, image_path, output_path, show_progress=True):
     print("running glomap mapper")
 
     glomap_mapper_cmd = 'glomap mapper ' + '\
@@ -213,7 +215,8 @@ def glomap_run_mapper(colmap_db_path, image_path, output_path):
     #         --output_path '  + output_path 
     
     for line in run_command(glomap_mapper_cmd):
-        print(line)
+        if show_progress:
+            print(line)
 
     print("glomap mapper done")
 
@@ -714,8 +717,10 @@ def convert_ply(output_path):
         storePly(ply_path, xyz, rgb)
 
 def read_abs_pose_from_glomap(group_name, group):
-    rec_path = f'{name}/groups/{group_name}'
+    rec_path = group['group_path']
     output_path = os.path.join(rec_path, 'sparse/0')
+    print(output_path)
+    input()
     group_imgs = {}
 
     if len(group['nodes']) == 1:
@@ -869,6 +874,7 @@ def read_groups_from_file(file_path):
     clusters = []  # 用来存储所有 cluster
     with open(file_path, "r") as f:
         cluster = []
+        group_path = ''
         for line in f:
             line = line.strip()
             if not line:
@@ -876,19 +882,22 @@ def read_groups_from_file(file_path):
             if line.startswith("# Cluster"):
                 # 如果已经有累积的 cluster，先存进去
                 if cluster:
-                    clusters.append(cluster)
+                    clusters.append((cluster, group_path))
                     cluster = []
+                    group_path = ''
+            elif line.startswith("Group path"):
+                group_path = line.split(":", 1)[1].strip()
             else:
                 # 当前行是图片文件名列表
                 cluster.extend(line.split())
         # 最后一组也要加进去
         if cluster:
-            clusters.append(cluster)
+            clusters.append((cluster, group_path))
 
     groups = []
     for c in clusters:
         print(len(c), "Cluster:", c)
-        group = {'nodes': c, 'q_mean': np.array([0, 0, 0, 1]), 't_mean': np.zeros(3), 'imgs': {}, 'use': True}
+        group = {'nodes': c, 'q_mean': np.array([0, 0, 0, 1]), 't_mean': np.zeros(3), 'imgs': {}, 'use': True, 'group_path': group_path}
         groups.append(group)
 
     return groups
@@ -943,7 +952,7 @@ def parse_rgb_file(rgb_txt_path):
     return mapping
 
 
-name = '/home/disk3_SSD/ylx/data/37'
+name = '/home/disk3_SSD/ylx/dataset_glg_sfm/cup_test'
 
 if __name__ == "__main__":
     time_start = time.time()
@@ -978,49 +987,6 @@ if __name__ == "__main__":
     # read groups from file
     groups = read_groups_from_file(f"{name}/image_clusters.txt")
 
-    # groups = []
-    # groups.append({'nodes':['00000.png', '00001.png', '00002.png', '00003.png', '00004.png', '00005.png', '00006.png', '00007.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # # groups.append({'nodes':['00008.png', '00009.png', '00010.png', '00011.png', '00012.png', '00013.png', '00014.png', '00015.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00006.png', '00007.png', '00008.png', '00009.png', '00010.png', '00011.png', '00012.png', '00013.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00016.png', '00017.png', '00018.png', '00019.png', '00020.png', '00021.png', '00022.png', '00023.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00024.png', '00025.png', '00026.png', '00027.png', '00028.png', '00029.png', '00030.png', '00031.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00032.png', '00033.png', '00034.png', '00035.png', '00036.png', '00037.png', '00038.png', '00039.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00039.png', '00040.png', '00041.png', '00042.png', '00043.png', '00044.png', '00045.png', '00046.png', '00047.png', '00048.png', '00049.png', '00050.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00050.png', '00051.png', '00052.png', '00053.png', '00054.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00061.png', '00062.png', '00063.png', '00064.png', '00065.png', '00066.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00054.png', '00055.png', '00056.png', '00057.png', '00058.png', '00059.png', '00060.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00067.png', '00068.png', '00069.png', '00070.png', '00071.png', '00072.png', '00073.png', '00074.png', '00075.png', '00076.png', '00077.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00078.png', '00079.png', '00080.png', '00081.png', '00082.png', '00083.png', '00084.png', '00085.png', '00086.png', '00087.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00088.png', '00089.png', '00090.png', '00091.png', '00092.png', '00093.png', '00094.png', '00095.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00096.png', '00097.png', '00098.png', '00099.png', '00100.png', '00101.png', '00102.png', '00103.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00104.png', '00105.png', '00106.png', '00107.png', '00108.png', '00109.png', '00110.png', '00111.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00112.png', '00113.png', '00114.png', '00115.png', '00116.png', '00117.png', '00118.png', '00119.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00120.png', '00121.png', '00122.png', '00123.png', '00124.png', '00125.png', '00126.png', '00127.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00128.png', '00129.png', '00130.png', '00131.png', '00132.png', '00133.png', '00134.png', '00135.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00136.png', '00137.png', '00138.png', '00139.png', '00140.png', '00141.png'],                           'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    # groups.append({'nodes':['00142.png', '00143.png', '00144.png', '00145.png'],                                                     'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
-    
-    # copy images to group folders
-    shutil.rmtree(f'{name}/groups', ignore_errors=True)  # 删除已存在的 groups 文件夹
-    for idx, group in enumerate(groups):
-        target_input_dir = os.path.join(f'{name}/groups/group_{idx}', 'input')
-        os.makedirs(target_input_dir, exist_ok=True)  # 创建目标文件夹
-
-        for filename in group['nodes']:
-            src_path = os.path.join(f'{name}/input', filename)
-            dst_path = os.path.join(target_input_dir, filename)
-            
-            if os.path.exists(src_path):
-                shutil.copy2(src_path, dst_path)
-                print(f'Copied {src_path} -> {dst_path}')
-            else:
-                print(f'Warning: {src_path} does not exist.')
-
-    # # skip the glomap for groups if you have already run it
-    run_glomap_for_groups(groups)
-
-    print('glomap for groups done!')
-    # input()
 
     new_groups = []
 
@@ -1029,6 +995,7 @@ if __name__ == "__main__":
         group_name = f'group_{idx}'
         nodes = group['nodes']
         print(group_name)
+        print()
         group_imgs = read_abs_pose_from_glomap(group_name, group)
 
         if not group_imgs:

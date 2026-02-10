@@ -376,7 +376,7 @@ def NCut(W):
 
 
 if __name__ == '__main__':
-    name = '/home/disk3_SSD/ylx/data/37'
+    name = '/home/disk3_SSD/ylx/dataset_glg_sfm/cup'
     parse_image_map_file(f'{name}/sparse/image_map.txt')
     imgs = read_abs_pose_from_glomap(f'{name}/sparse/0')
     # input()
@@ -401,7 +401,7 @@ if __name__ == '__main__':
 
     clusters = recursive_NCut(W1, idx2name)
     # clusters = NCut(W1)
-    with open(f'{name}/image_clusters.txt', 'w') as f:
+    with open(f'{name}/image_clusters_ncut.txt', 'w') as f:
         for idx, c in enumerate(clusters):
             f.write(f'# Cluster {idx}, size: {len(c)}\n')
             for img in c:

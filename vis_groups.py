@@ -3,9 +3,9 @@ import numpy as np
 import open3d as o3d
 import colorsys
 
-name = '/home/disk3_SSD/ylx/data/26'
-model_path = f"{name}/sparse_colmap/1"
-model_path = '/home/disk3_SSD/ylx/dataset_dopp/arc_de_triomphe/sparse_doppelgangers_0.800/0'
+name = '/home/disk3_SSD/ylx/dataset_glg_sfm/cup/'
+model_path = f"{name}/sparse_ransac2/0"
+# model_path = '/home/disk3_SSD/ylx/dataset_dopp/arc_de_triomphe/sparse_doppelgangers_0.800/0'
 reconstruction = pycolmap.Reconstruction(model_path)
 
 print(f"Loaded {len(reconstruction.images)} images, "
@@ -13,7 +13,7 @@ print(f"Loaded {len(reconstruction.images)} images, "
       f"{len(reconstruction.points3D)} points")
 
 print(reconstruction.summary())
-input()
+
 
 # points = []
 # colors = []
@@ -26,11 +26,11 @@ input()
 # pcd.points = o3d.utility.Vector3dVector(np.array(points))
 # pcd.colors = o3d.utility.Vector3dVector(np.array(colors))
 
-ply_path = f"{name}/sparse/0/points1.ply"
-pcd = o3d.io.read_point_cloud(ply_path)
+# ply_path = f"{name}/sparse/0/points1.ply"
+# pcd = o3d.io.read_point_cloud(ply_path)
 
 
-def create_camera_geometry(T, scale=0.1, color=[0.8, 0, 0.8]):
+def create_camera_geometry(T, scale=1, color=[0.8, 0, 0.8]):
     """创建一个小相机金字塔（或坐标系）用于可视化"""
     # 定义相机在自身坐标系下的 5 个点：光心 + 图像平面四角
     pts = np.array([
@@ -86,7 +86,7 @@ def read_groups_from_file(file_path):
     return groups
 
 
-groups_1 = read_groups_from_file(f"{name}/image_clusters.txt")
+groups_1 = read_groups_from_file(f"{name}/image_clusters_louvain.txt")
 # groups_2 = read_groups_from_file(f"{name}/image_clusters_pose.txt")
 num_group1 = len(groups_1)
 # num_group2 = len(groups_2)

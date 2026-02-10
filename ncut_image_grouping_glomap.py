@@ -5,26 +5,21 @@ import pandas as pd
 from collections import defaultdict
 from scipy.spatial.transform import Rotation as R
 from ransac_image_grouping import read_abs_pose_from_glomap, geodesic_angle, geodesic_angle_mat
-from ransac_group_glomap_c2w_pnp_1 import colmap_run_feature_extractor, colmap_run_feature_matcher, glomap_run_mapper
+from ransac_group_glomap_c2w_pnp_2 import colmap_run_feature_extractor, colmap_run_feature_matcher, glomap_run_mapper
 import os
 import shutil
 import networkx as nx
 import math
 import threading
 
-img_name2id = {}
-name2idx = {}
-idx2name = {}
 
-def parse_image_map_file(file_path):
-    with open(file_path, 'r') as f:
-        for line in f:
-            img_id, image_name = line.split(' ')
-            img_name2id.update({image_name.strip(): int(img_id)})
 
 def parse_image_pair_file(file_path, imgs):
     # 用于存储边信息
     edges = []
+
+    name2idx = {}
+    idx2name = {}
 
     with open(file_path, "r") as f:
         for line in f:
@@ -117,11 +112,14 @@ def parse_image_pair_file(file_path, imgs):
     df = pd.DataFrame(W, index=image_names, columns=image_names)
     print(df)
 
-    return W
+    return W, idx2name
 
 def parse_image_pair_file_pose(file_path, imgs):
     # 用于存储边信息
     edges = []
+
+    name2idx = {}
+    idx2name = {}
 
     with open(file_path, "r") as f:
         for line in f:
@@ -216,10 +214,10 @@ def parse_image_pair_file_pose(file_path, imgs):
     df = pd.DataFrame(W, index=image_names, columns=image_names)
     print(df)
 
-    return W
+    return W, idx2name
 
 
-def NCut(W, size): 
+def NCut(W, size, idx2name): 
     # 计算拉普拉斯矩阵
     D = np.diag(W.sum(axis=1))
     L = D - W 
@@ -228,10 +226,10 @@ def NCut(W, size):
     eigvals, eigvecs = np.linalg.eigh(L_sym) # 排序 
     eigvals = np.sort(eigvals) # 自动检测最大谱间隙位置 
     gaps = np.diff(eigvals) 
-    # best_k = np.argmax(gaps[:10]) + 1 # 取前10个特征值防止噪声影响 
-    best_k = int(W.shape[0] / size)
+    K = int(W.shape[0] / size)
+    best_k = np.argmax(gaps[:min(K, len(gaps))]) + 1 # 取前K个特征值防止噪声影响 
     print(f"最佳聚类数（根据谱间隙法）: k = {best_k}") # 使用最佳 k 进行谱聚类 
-    sc = SpectralClustering(n_clusters=best_k, affinity='precomputed', random_state=0) 
+    sc = SpectralClustering(n_clusters=max(2, best_k), affinity='precomputed', random_state=0) 
     labels = sc.fit_predict(W) 
     
     clusters = []
@@ -365,9 +363,9 @@ def run_glomap_for_group(rec_path):
     image_path = os.path.join(rec_path, 'input')
     output_path = os.path.join(rec_path, 'sparse')
 
-    colmap_run_feature_extractor(db_path, image_path)
-    colmap_run_feature_matcher(db_path)
-    glomap_run_mapper(db_path, image_path, output_path)
+    colmap_run_feature_extractor(db_path, image_path, show_progress=False)
+    colmap_run_feature_matcher(db_path, show_progress=False)
+    glomap_run_mapper(db_path, image_path, output_path, show_progress=False)
 
 
 
@@ -375,24 +373,23 @@ final_clusters = []
 
 def ncut_image_grouping_glomap(name, depth):
     # name = '/home/disk3_SSD/ylx/data/26_ablation'
-    # shutil.rmtree(f'{name}/groups', ignore_errors=True)  # 删除已存在的 groups 文件夹
+    # shutil.rmtree(f'{name}/groups', ignore_errors=True)  # 删除已存在的 groups 文件
 
-
-    parse_image_map_file(f'{name}/sparse/image_map.txt')
     imgs = read_abs_pose_from_glomap(f'{name}/sparse/0')
 
     if depth == 0:
-        W1 = parse_image_pair_file(f'{name}/sparse/image_pair_inliers_relpose.txt', imgs)
+        W1, idx2name = parse_image_pair_file(f'{name}/sparse/image_pair_inliers_relpose_final.txt', imgs)
     elif depth <= 2:
-        W1 = parse_image_pair_file_pose(f'{name}/sparse/image_pair_inliers_relpose.txt', imgs)
+        W1, idx2name = parse_image_pair_file_pose(f'{name}/sparse/image_pair_inliers_relpose_final.txt', imgs)
     else:
         print('Exceeded maximum recursion depth. Stopping further grouping.')
+        final_clusters.append((sorted(list(imgs.keys())), name))
         return
 
 
     print(len(imgs))
 
-    clusters = NCut(W1, 20)
+    clusters = NCut(W1, int(20 / (depth + 1)), idx2name)
     threads = []
     for idx, cluster in enumerate(clusters):
         target_input_dir = os.path.join(f'{name}/groups/group_{idx}', 'input')
@@ -405,7 +402,7 @@ def ncut_image_grouping_glomap(name, depth):
             
             if os.path.exists(src_path):
                 shutil.copy2(src_path, dst_path)    
-                print(f'Copied {src_path} -> {dst_path}')
+                # print(f'Copied {src_path} -> {dst_path}')
             else:
                 print(f'Warning: {src_path} does not exist.')
         
@@ -417,7 +414,6 @@ def ncut_image_grouping_glomap(name, depth):
     for t in threads:
         t.join()    
     print('All glomap processes completed.')
-    input()
 
 
     for idx, cluster in enumerate(clusters):
@@ -432,12 +428,16 @@ def ncut_image_grouping_glomap(name, depth):
 
 
 if __name__ == "__main__":
-    ncut_image_grouping_glomap('/home/disk3_SSD/ylx/data/26_ablation', 0)
+    shutil.rmtree(f'/home/disk3_SSD/ylx/dataset_glg_sfm/cup_test/groups', ignore_errors=True)  # 删除已存在的 groups 文件
+    ncut_image_grouping_glomap('/home/disk3_SSD/ylx/dataset_glg_sfm/cup_test', 0)
+
+    print('Final clusters:', final_clusters)
 
 
-    with open(f'/home/disk3_SSD/ylx/data/26_ablation/image_clusters.txt', 'w') as f:
-        for idx, c in enumerate(final_clusters):
+    with open(f'/home/disk3_SSD/ylx/dataset_glg_sfm/cup_test/image_clusters.txt', 'w') as f:
+        for idx, (c, name) in enumerate(final_clusters):
             f.write(f'# Cluster {idx}, size: {len(c)}\n')
+            f.write(f'Group path: {name}\n')
             for img in c:
                 f.write(f'{img} ')
             f.write('\n')

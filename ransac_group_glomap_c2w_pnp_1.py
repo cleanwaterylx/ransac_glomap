@@ -174,7 +174,6 @@ def colmap_run_feature_extractor(colmap_db_path, image_path, camera_model='PINHO
             --database_path ' + colmap_db_path + '\
             --image_path ' + image_path + ' \
             --ImageReader.camera_model PINHOLE  \
-            --ImageReader.single_camera 1 \
             --SiftExtraction.use_gpu 1 '
 
     print(feat_extracton_cmd)
@@ -624,8 +623,7 @@ def ransac_edges(graph, edges, group1, group2, i, j, max_iter=100):
     print('edges', edges)
     print('inliers ', best_inliers)
     print('outliers ', outliers)
-    input()
-    
+
 def run_glomap_for_groups(groups):
     for idx, group in enumerate(groups):
         if len(group['nodes']) == 1:
@@ -922,7 +920,7 @@ def parse_rgb_file(rgb_txt_path):
     return mapping
 
 
-name = '/home/disk3_SSD/ylx/data/22'
+name = '/home/disk3_SSD/ylx/dataset_pi3_classification/18'
 
 if __name__ == "__main__":
     time_start = time.time()
@@ -955,7 +953,7 @@ if __name__ == "__main__":
     print(f"初始图中共有 {len(graph)} 个节点，{num_edges} 条边")
 
     # read groups from file
-    groups = read_groups_from_file(f"{name}/image_clusters.txt")
+    groups = read_groups_from_file(f"{name}/image_clusters_louvain.txt")
 
     # groups = []
     # groups.append({'nodes':['00000.png', '00001.png', '00002.png', '00003.png', '00004.png', '00005.png', '00006.png', '00007.png'], 'q_mean':np.array([0,0,0,1]), 't_mean':np.zeros(3), 'imgs' : {}})
